@@ -1,0 +1,10 @@
+streamlit
+sqlalchemy
+psycopg2-binary
+pandas
+plotly
+bcrypt==4.1.2
+streamlit-cookies-manager
+streamlit-option-menu
+plotly==5.22.0
+streamlit-plotly-events==0.0.6
