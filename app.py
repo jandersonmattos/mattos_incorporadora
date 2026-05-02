@@ -9,7 +9,7 @@ import time
 from streamlit_option_menu import option_menu
 
 if "logado" not in st.session_state:
-    st.session_state.logado = True
+    st.session_state.logado = False
 
 session = SessionLocal()
 
@@ -184,7 +184,7 @@ if menu == "Dashboard":
             .sum()
             .sort_values("Pago", ascending=False)
             .reset_index(drop=True)  # 🔥 IMPORTANTE
-        )
+        ) 
 
         resumo_pago["Percentual"] = (
             resumo_pago["Pago"] / resumo_pago["Pago"].sum() * 100
