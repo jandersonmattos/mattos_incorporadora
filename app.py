@@ -8,9 +8,6 @@ import bcrypt
 import time
 from streamlit_option_menu import option_menu
 
-if "logado" not in st.session_state:
-    st.session_state.logado = False
-
 session = SessionLocal()
 
 st.set_page_config(layout="wide")
@@ -33,6 +30,28 @@ if "editar_lancamento_id" not in st.session_state:
     st.session_state.editar_lancamento_id = None
 
 # ==========================
+# LOGIN PERSISTENTE FUNCIONAL
+# ==========================
+
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
+if "usuario_id" not in st.session_state:
+    st.session_state.usuario_id = None
+
+# ==========================
+# RECUPERA LOGIN VIA QUERY PARAM
+# ==========================
+query_user = st.query_params.get("user")
+
+if query_user and not st.session_state.logado:
+    try:
+        st.session_state.usuario_id = int(query_user)
+        st.session_state.logado = True
+    except:
+        pass
+
+# ==========================
 # LOGIN
 # ==========================
 if not st.session_state.logado:
@@ -52,25 +71,40 @@ if not st.session_state.logado:
         ):
             st.session_state.logado = True
             st.session_state.usuario_id = user.id
+
+            # Salva usuário na URL
+            st.query_params["user"] = str(user.id)
+
             st.success("Login realizado com sucesso!")
+            time.sleep(1)
             st.rerun()
+
         else:
             st.error("Usuário ou senha inválidos")
 
     st.stop()
 
+# ==========================
+# LOGOUT
+# ==========================
 if st.button("🚪 Sair"):
     st.session_state.clear()
+
+    # Remove query param
+    st.query_params.clear()
+
     st.rerun()
 
 # ==========================
-# SESSÃO
+# CONTROLE DE EXPIRAÇÃO
 # ==========================
 if "last_activity" not in st.session_state:
     st.session_state.last_activity = time.time()
 
 if time.time() - st.session_state.last_activity > 1800:
     st.session_state.clear()
+    st.query_params.clear()
+
     st.warning("Sessão expirada. Faça login novamente.")
     st.rerun()
 
