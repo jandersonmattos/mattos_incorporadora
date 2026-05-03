@@ -131,7 +131,7 @@ if menu == "Dashboard":
 
         data_pago.append({
             "Categoria": c.categoria.nome if c.categoria else "-",
-            "Recurso": c.recurso.nome if c.recurso else "-",
+            "Observação": c.descricao if c.descricao else "-",
             "Etapa": c.etapa.nome if c.etapa else "Não definido",
             "Pago": valor_pago
         })
@@ -139,12 +139,10 @@ if menu == "Dashboard":
         if saldo > 0:
             data_saldo.append({
                 "Categoria": c.categoria.nome if c.categoria else "-",
+                "Observação": c.descricao if c.descricao else "-",
                 "Saldo": saldo
             })
 
-    # ==========================
-    # CÁLCULOS GERAIS
-    # ==========================
     meta_lucro = total_pago_geral * 0.3
     valor_venda_total = total_pago_geral + meta_lucro
 
@@ -157,9 +155,6 @@ if menu == "Dashboard":
         custo_por_unidade = 0
         venda_por_unidade = 0
 
-    # ==========================
-    # KPIs
-    # ==========================
     col1, col2, col3, col4, col5 = st.columns(5)
 
     col1.metric("💰 Total Pago", f"R$ {total_pago_geral:,.2f}")
@@ -170,9 +165,6 @@ if menu == "Dashboard":
 
     st.divider()
 
-    # ==========================
-    # PAGAMENTOS POR CATEGORIA (PIZZA INTERATIVA CORRIGIDA)
-    # ==========================
     if data_pago:
         import plotly.express as px
         from streamlit_plotly_events import plotly_events
@@ -183,8 +175,8 @@ if menu == "Dashboard":
             df_pago.groupby("Categoria", as_index=False)["Pago"]
             .sum()
             .sort_values("Pago", ascending=False)
-            .reset_index(drop=True)  # 🔥 IMPORTANTE
-        ) 
+            .reset_index(drop=True)
+        )
 
         resumo_pago["Percentual"] = (
             resumo_pago["Pago"] / resumo_pago["Pago"].sum() * 100
@@ -192,29 +184,18 @@ if menu == "Dashboard":
 
         st.subheader("💰 Distribuição de Pagamentos por Categoria")
 
-        # ==========================
-        # SESSION STATE
-        # ==========================
         if "categoria_click" not in st.session_state:
             st.session_state.categoria_click = None
 
-        # ==========================
-        # GRÁFICO (CLARO E BONITO)
-        # ==========================
         fig = px.pie(
             resumo_pago,
             values="Pago",
             names="Categoria",
-            hole=0.3  # estilo donut (opcional)
+            hole=0.3
         )
 
-        fig.update_layout(
-            template="plotly_white"  # 🔥 resolve gráfico escuro
-        )
+        fig.update_layout(template="plotly_white")
 
-        # ==========================
-        # EVENTO DE CLIQUE
-        # ==========================
         selected = plotly_events(
             fig,
             click_event=True,
@@ -222,19 +203,11 @@ if menu == "Dashboard":
             key="pizza_pagamentos"
         )
 
-        # ❗ NÃO usar st.plotly_chart aqui (evita duplicação)
-
-        # ==========================
-        # CAPTURA CLIQUE (CORRETO)
-        # ==========================
         if selected:
-            index = selected[0]["pointNumber"]  # 🔥 CORRETO
+            index = selected[0]["pointNumber"]
             categoria = resumo_pago.iloc[index]["Categoria"]
             st.session_state.categoria_click = categoria
 
-        # ==========================
-        # FILTRO VISUAL
-        # ==========================
         col1, col2 = st.columns([4, 1])
 
         if st.session_state.categoria_click:
@@ -244,9 +217,6 @@ if menu == "Dashboard":
                 st.session_state.categoria_click = None
                 st.rerun()
 
-        # ==========================
-        # TABELA ORDENADA (DO JEITO CERTO)
-        # ==========================
         st.subheader("📄 Detalhamento de Pagamentos")
 
         df_detalhe = df_pago.copy()
@@ -256,14 +226,13 @@ if menu == "Dashboard":
                 df_detalhe["Categoria"] == st.session_state.categoria_click
             ]
 
-        # 🔥 ORDENAÇÃO POR CATEGORIA + VALOR
         df_detalhe = df_detalhe.sort_values(
             by=["Categoria", "Pago"],
             ascending=[True, False]
         )
 
         st.dataframe(
-            df_detalhe[["Categoria", "Recurso", "Pago"]],
+            df_detalhe[["Categoria", "Observação", "Pago"]],
             use_container_width=True
         )
 
@@ -323,7 +292,6 @@ if menu == "Dashboard":
                 st.session_state.etapa_click = None
                 st.rerun()
 
-        # tabela filtrada por etapa
         st.subheader("📄 Detalhamento por Etapa")
 
         df_detalhe = df_etapa.copy()
@@ -339,15 +307,12 @@ if menu == "Dashboard":
         )
 
         st.dataframe(
-            df_detalhe[["Etapa", "Categoria", "Recurso", "Pago"]],
+            df_detalhe[["Etapa", "Categoria", "Observação", "Pago"]],
             use_container_width=True
         )
     else:
         st.info("Sem dados para etapas.")
 
-    # ==========================
-    # SALDO (PIZZA)
-    # ==========================
     st.subheader("💸 Saldo Ainda a Pagar")
 
     if data_saldo:
@@ -365,7 +330,6 @@ if menu == "Dashboard":
             .sort_values("Saldo", ascending=False)
         )
 
-        # calcula percentual
         resumo_saldo["Percentual"] = resumo_saldo["Saldo"] / total_pendente * 100
 
         st.subheader("📊 Distribuição de Saldo por Categoria")
@@ -387,10 +351,14 @@ if menu == "Dashboard":
         st.altair_chart(chart, use_container_width=True)
 
         st.subheader("📄 Lançamentos Pendentes")
-        st.dataframe(df_saldo, use_container_width=True)
+        st.dataframe(
+            df_saldo[["Categoria", "Observação", "Saldo"]],
+            use_container_width=True
+        )
 
     else:
         st.info("Sem saldo pendente.")
+
 
 elif menu == "Etapas da Obra":
     st.title("🏗️ Etapas da Obra")
@@ -555,11 +523,10 @@ elif menu == "Projetos":
             st.rerun()
 
         categorias = session.query(models.Categoria).all()
-        recursos = session.query(models.Recurso).all()
         etapas = session.query(models.EtapaObra).all()
 
         # ==========================
-        # FORMULÁRIO (NOVO / EDIÇÃO)
+        # FORMULÁRIO (EDIÇÃO)
         # ==========================
         if st.session_state.editar_lancamento_id:
             lancamento = session.query(models.Custo).get(
@@ -575,13 +542,6 @@ elif menu == "Projetos":
                 format_func=lambda x: x.nome
             )
 
-            recurso = st.selectbox(
-                "Recurso",
-                recursos,
-                index=recursos.index(lancamento.recurso),
-                format_func=lambda x: x.nome
-            )
-
             etapa = st.selectbox(
                 "Etapa da Obra",
                 etapas,
@@ -589,7 +549,10 @@ elif menu == "Projetos":
                 format_func=lambda x: x.nome
             )
 
-            descricao = st.text_input("Descrição", value=lancamento.descricao)
+            descricao = st.text_input(
+                "Observação",
+                value=lancamento.descricao or ""
+            )
 
             valor_previsto = st.number_input(
                 "Valor Previsto",
@@ -615,20 +578,21 @@ elif menu == "Projetos":
                 value=float(lancamento.valor_unitario or 0)
             )
 
-            data_custo = st.date_input("Data", value=lancamento.data)
+            data_custo = st.date_input(
+                "Data",
+                value=lancamento.data
+            )
 
             col1, col2 = st.columns(2)
 
             if col1.button("Atualizar Lançamento"):
                 lancamento.categoria_id = categoria.id
-                lancamento.recurso_id = recurso.id
                 lancamento.descricao = descricao
                 lancamento.valor_previsto = valor_previsto
                 lancamento.valor_pago = valor_pago
                 lancamento.data = data_custo
                 lancamento.quantidade = quantidade
                 lancamento.valor_unitario = valor_unitario
-                lancamento.valor_previsto = valor_previsto
                 lancamento.etapa_id = etapa.id if etapa else None
 
                 session.commit()
@@ -640,6 +604,9 @@ elif menu == "Projetos":
                 st.session_state.editar_lancamento_id = None
                 st.rerun()
 
+        # ==========================
+        # NOVO LANÇAMENTO
+        # ==========================
         else:
             st.subheader("➕ Novo Lançamento")
 
@@ -649,24 +616,38 @@ elif menu == "Projetos":
                 format_func=lambda x: x.nome
             )
 
-            recurso = st.selectbox(
-                "Recurso",
-                recursos,
-                format_func=lambda x: x.nome
-            )
-
-            descricao = st.text_input("Descrição")
+            descricao = st.text_input("Observação")
 
             col1, col2 = st.columns(2)
 
-            quantidade = col1.number_input("Quantidade", min_value=0.0, value=1.0)
-            valor_unitario = col2.number_input("Valor Unitário", min_value=0.0, value=0.0)
+            quantidade = col1.number_input(
+                "Quantidade",
+                min_value=0.0,
+                value=1.0
+            )
 
-            valor_pago = st.number_input("Valor Pago", min_value=0.0, value=0.0)
+            valor_unitario = col2.number_input(
+                "Valor Unitário",
+                min_value=0.0,
+                value=0.0
+            )
 
-            data_custo = st.date_input("Data", value=date.today())
+            valor_previsto = st.number_input(
+                "Valor Previsto",
+                min_value=0.0,
+                value=0.0
+            )
 
-            valor_previsto_calculado = quantidade * valor_unitario
+            valor_pago = st.number_input(
+                "Valor Pago",
+                min_value=0.0,
+                value=0.0
+            )
+
+            data_custo = st.date_input(
+                "Data",
+                value=date.today()
+            )
 
             etapa = st.selectbox(
                 "Etapa da Obra",
@@ -674,20 +655,17 @@ elif menu == "Projetos":
                 format_func=lambda x: x.nome
             )
 
-            st.info(f"💰 Total Previsto: R$ {valor_previsto_calculado:,.2f}")
-
             if st.button("Salvar Lançamento"):
                 session.add(models.Custo(
                     descricao=descricao,
                     quantidade=quantidade,
                     valor_unitario=valor_unitario,
-                    valor_previsto=valor_previsto_calculado,
+                    valor_previsto=valor_previsto,
                     valor_pago=valor_pago,
                     data=data_custo,
                     projeto_id=projeto.id,
                     categoria_id=categoria.id,
-                    recurso_id=recurso.id,
-                    etapa_id=etapa.id if etapa else None   # 🔥 FALTAVA ISSO
+                    etapa_id=etapa.id if etapa else None
                 ))
 
                 session.commit()
@@ -695,26 +673,22 @@ elif menu == "Projetos":
                 st.rerun()
 
         # ==========================
-        # LISTAGEM COM HEADER + FILTRO
+        # LISTAGEM
         # ==========================
         st.subheader("Lançamentos cadastrados")
 
-        # 🔎 FILTRO
-        filtro = st.text_input("🔎 Buscar por descrição ou material")
+        filtro = st.text_input("🔎 Buscar por observação")
 
         lancamentos = session.query(models.Custo).filter(
             models.Custo.projeto_id == projeto.id
         ).all()
 
-        # 🔥 APLICA FILTRO
         if filtro:
             filtro_lower = filtro.lower()
-
             lancamentos = [
                 c for c in lancamentos
                 if (
-                    (c.descricao and filtro_lower in c.descricao.lower()) or
-                    (c.recurso and c.recurso.nome and filtro_lower in c.recurso.nome.lower())
+                    c.descricao and filtro_lower in c.descricao.lower()
                 )
             ]
 
@@ -727,10 +701,9 @@ elif menu == "Projetos":
             for c in lancamentos:
                 data_export.append({
                     "ID": c.id,
-                    "Descricao": c.descricao,
+                    "Observacao": c.descricao,
                     "Categoria": c.categoria.nome if c.categoria else "-",
-                    "Recurso": c.recurso.nome if c.recurso else "-",
-                    "Valor Previsto": float(c.total_previsto),
+                    "Valor Previsto": float(c.valor_previsto or 0),
                     "Valor Pago": float(c.valor_pago or 0),
                     "Quantidade": float(c.quantidade or 0),
                     "Valor Unitario": float(c.valor_unitario or 0),
@@ -740,7 +713,10 @@ elif menu == "Projetos":
 
             df_export = pd.DataFrame(data_export)
 
-            csv = df_export.to_csv(index=False, sep=";").encode("utf-8")
+            csv = df_export.to_csv(
+                index=False,
+                sep=";"
+            ).encode("utf-8")
 
             st.download_button(
                 label="📥 Exportar CSV",
@@ -749,50 +725,59 @@ elif menu == "Projetos":
                 mime="text/csv"
             )
 
-        # HEADER (AGORA COM ID)
-        h0, h1, h2, h3, h4, h5, h6, h7, h8, h9 = st.columns([1,3,2,2,2,2,2,2,2,2])
+        # ==========================
+        # TABELA
+        # ==========================
+        h0, h1, h2, h3, h4, h5, h6, h7, h8 = st.columns(
+            [1,3,2,2,2,2,2,2,2]
+        )
 
         h0.markdown("**ID**")
-        h1.markdown("**Descrição**")
+        h1.markdown("**Observação**")
         h2.markdown("**Categoria**")
-        h3.markdown("**Recurso**")
-        h4.markdown("**Etapa**")
-        h5.markdown("**Previsto**")
-        h6.markdown("**Pago**")
-        h7.markdown("**Qtd**")
-        h8.markdown("**Editar**")
-        h9.markdown("**Excluir**")
+        h3.markdown("**Etapa**")
+        h4.markdown("**Previsto**")
+        h5.markdown("**Pago**")
+        h6.markdown("**Qtd**")
+        h7.markdown("**Editar**")
+        h8.markdown("**Excluir**")
 
-        # LISTAGEM
         if not lancamentos:
             st.info("Nenhum lançamento encontrado.")
         else:
             for c in lancamentos:
-                valor_previsto = float(c.total_previsto)
+                valor_previsto = float(c.valor_previsto or 0)
                 valor_pago = float(c.valor_pago or 0)
-                valor_unitario = float(c.valor_unitario or 0)
                 quantidade = float(c.quantidade or 0)
 
-                col0, col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1,3,2,2,2,2,2,2,2,2])
+                col0, col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(
+                    [1,3,2,2,2,2,2,2,2]
+                )
 
                 col0.write(c.id)
                 col1.write(c.descricao or "-")
                 col2.write(c.categoria.nome if c.categoria else "-")
-                col3.write(c.recurso.nome if c.recurso else "-")
-                col4.write(c.etapa.nome if c.etapa else "-")  # 🔥 NOVO
-                col5.write(f"R$ {valor_previsto:,.2f}")
-                col6.write(f"R$ {valor_pago:,.2f}")
-                col7.write(quantidade)
+                col3.write(c.etapa.nome if c.etapa else "-")
+                col4.write(f"R$ {valor_previsto:,.2f}")
+                col5.write(f"R$ {valor_pago:,.2f}")
+                col6.write(quantidade)
 
-                if col8.button("Editar", key=f"editar_lancamento_{c.id}"):
+                if col7.button(
+                    "Editar",
+                    key=f"editar_lancamento_{c.id}"
+                ):
                     st.session_state.editar_lancamento_id = c.id
                     st.rerun()
 
-                if col9.button("Deletar", key=f"deletar_lancamento_{c.id}"):
+                if col8.button(
+                    "Deletar",
+                    key=f"deletar_lancamento_{c.id}"
+                ):
                     session.delete(c)
                     session.commit()
                     st.success("Lançamento deletado com sucesso!")
                     st.rerun()
+
     # ==========================
     # ARQUIVOS DO PROJETO
     # ==========================

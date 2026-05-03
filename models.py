@@ -33,7 +33,8 @@ class Recurso(Base):
     id = Column(Integer, primary_key=True)
     nome = Column(String)
 
-    lancamentos = relationship("Custo", back_populates="recurso")
+    # 🔥 não usamos mais no custo (mantido só histórico)
+    lancamentos = relationship("Custo", back_populates="recurso", viewonly=True)
 
 
 class TipoArquivo(Base):
@@ -62,25 +63,26 @@ class Custo(Base):
 
     projeto_id = Column(Integer, ForeignKey("projetos.id"))
     categoria_id = Column(Integer, ForeignKey("categorias.id"))
-    recurso_id = Column(Integer, ForeignKey("recursos.id"))
 
-    # 🔥 NOVO CAMPO
+    # 🔥 NOVO CAMPO (TEXTO LIVRE)
+    recurso_nome = Column(String)
+
+    # 🔥 manter temporariamente para migração (pode remover depois)
+    recurso_id = Column(Integer, ForeignKey("recursos.id"), nullable=True)
+
     etapa_id = Column(Integer, ForeignKey("etapas_obra.id"))
 
     projeto = relationship("Projeto", back_populates="lancamentos")
     categoria = relationship("Categoria", back_populates="lancamentos")
+
+    # 🔥 manter temporário
     recurso = relationship("Recurso", back_populates="lancamentos")
 
-    # 🔥 NOVO RELACIONAMENTO
     etapa = relationship("EtapaObra", back_populates="lancamentos")
 
     @property
-    def total_previsto(self):
-        return (self.quantidade or 0) * (self.valor_unitario or 0)
-
-    @property
     def saldo_restante(self):
-        return self.total_previsto - (self.valor_pago or 0)
+        return (self.valor_previsto or 0) - (self.valor_pago or 0)
 
 
 class ArquivoProjeto(Base):
@@ -97,12 +99,14 @@ class ArquivoProjeto(Base):
     projeto = relationship("Projeto", back_populates="arquivos")
     tipo_arquivo = relationship("TipoArquivo", back_populates="arquivos")
 
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     senha_hash = Column(String, nullable=False)
+
 
 class EtapaObra(Base):
     __tablename__ = "etapas_obra"
