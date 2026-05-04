@@ -29,6 +29,10 @@ if "editar_projeto_id" not in st.session_state:
 if "editar_lancamento_id" not in st.session_state:
     st.session_state.editar_lancamento_id = None
 
+if "somar_lancamento_id" not in st.session_state:
+    st.session_state.somar_lancamento_id = None
+    
+
 # ==========================
 # LOGIN PERSISTENTE FUNCIONAL
 # ==========================
@@ -51,36 +55,120 @@ if query_user and not st.session_state.logado:
     except:
         pass
 
+import base64
+
+def get_base64(file_path):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(base_dir, file_path)
+
+    if not os.path.exists(full_path):
+        st.error(f"Imagem não encontrada: {full_path}")
+        return ""
+
+    with open(full_path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+bg_img = get_base64("assets/background.png")
+
 # ==========================
 # LOGIN
 # ==========================
 if not st.session_state.logado:
-    st.title("🔐 Login")
 
-    username = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
+    st.markdown(f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/png;base64,{bg_img}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+    }}
 
-    if st.button("Entrar"):
-        user = session.query(models.Usuario).filter_by(
-            username=username
-        ).first()
+    header, footer {{visibility: hidden;}}
+    section[data-testid="stSidebar"] {{display: none;}}
 
-        if user and bcrypt.checkpw(
-            senha.encode(),
-            user.senha_hash.encode()
-        ):
-            st.session_state.logado = True
-            st.session_state.usuario_id = user.id
+    .block-container {{
+        padding-top: 0rem !important;
+    }}
 
-            # Salva usuário na URL
-            st.query_params["user"] = str(user.id)
+    /* CARD */
+    .login-card {{
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(20px);
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }}
 
-            st.success("Login realizado com sucesso!")
-            time.sleep(1)
-            st.rerun()
+    .login-title {{
+        text-align: center;
+        font-size: 28px;
+        font-weight: bold;
+        color: white;
+        margin-bottom: 20px;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
 
-        else:
-            st.error("Usuário ou senha inválidos")
+    st.markdown("""
+    <style>
+    header, footer {visibility: hidden;}
+    section[data-testid="stSidebar"] {display: none;}
+
+    .block-container {
+        padding-top: 0rem !important;
+    }
+
+    /* CARD */
+    .login-card {
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(20px);
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        display: none;
+    }
+
+    .login-title {
+        text-align: center;
+        font-size: 28px;
+        font-weight: bold;
+        color: white;
+        margin-bottom: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # CENTRALIZA HORIZONTALMENTE (ESSA É A CHAVE)
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">🏗️ Canteiro de Obras</div>', unsafe_allow_html=True)
+
+        username = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password")
+
+        if st.button("Entrar", use_container_width=True):
+            user = session.query(models.Usuario).filter_by(
+                username=username
+            ).first()
+
+            if user and bcrypt.checkpw(
+                senha.encode(),
+                user.senha_hash.encode()
+            ):
+                st.session_state.logado = True
+                st.session_state.usuario_id = user.id
+                st.query_params["user"] = str(user.id)
+
+                st.success("Login realizado com sucesso!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Usuário ou senha inválidos")
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.stop()
 
@@ -559,6 +647,54 @@ elif menu == "Projetos":
         categorias = session.query(models.Categoria).all()
         etapas = session.query(models.EtapaObra).all()
 
+        @st.dialog("➕ Somar valores no lançamento")
+        def modal_somar_lancamento(lancamento_id):
+            lancamento_soma = session.query(models.Custo).get(lancamento_id)
+
+            st.write(f"Observação: {lancamento_soma.descricao or '-'}")
+
+            st.write(
+                f"Valor previsto atual: R$ {float(lancamento_soma.valor_previsto or 0):,.2f}"
+            )
+
+            st.write(
+                f"Valor pago atual: R$ {float(lancamento_soma.valor_pago or 0):,.2f}"
+            )
+
+            valor_adicional_previsto = st.number_input(
+                "Adicionar ao Previsto",
+                min_value=0.0,
+                value=0.0,
+                key=f"modal_prev_{lancamento_id}"
+            )
+
+            valor_adicional_pago = st.number_input(
+                "Adicionar ao Pago",
+                min_value=0.0,
+                value=0.0,
+                key=f"modal_pago_{lancamento_id}"
+            )
+
+            col1, col2 = st.columns(2)
+
+            if col1.button("Salvar"):
+                lancamento_soma.valor_previsto = float(
+                    lancamento_soma.valor_previsto or 0
+                ) + valor_adicional_previsto
+
+                lancamento_soma.valor_pago = float(
+                    lancamento_soma.valor_pago or 0
+                ) + valor_adicional_pago
+
+                session.commit()
+
+                st.success("Valores somados com sucesso!")
+                st.rerun()
+
+            if col2.button("Cancelar"):
+                st.rerun()
+
+        
         # ==========================
         # FORMULÁRIO (EDIÇÃO)
         # ==========================
@@ -711,20 +847,63 @@ elif menu == "Projetos":
         # ==========================
         st.subheader("Lançamentos cadastrados")
 
-        filtro = st.text_input("🔎 Buscar por observação")
+        st.subheader("🔎 Filtros")
 
-        lancamentos = session.query(models.Custo).filter(
+        colf1, colf2, colf3 = st.columns(3)
+
+        # 🔎 Observação
+        filtro_obs = colf1.text_input(
+            "Observação",
+            key="filtro_obs_lancamentos"
+        )
+
+        # 🗂️ Categoria
+        categorias_filtro = [None] + categorias
+        filtro_categoria = colf2.selectbox(
+            "Categoria",
+            categorias_filtro,
+            format_func=lambda x: "Todas" if x is None else x.nome,
+            key="filtro_categoria_lancamentos"
+        )
+
+        # 🏗️ Etapa
+        etapas_filtro = [None] + etapas
+        filtro_etapa = colf3.selectbox(
+            "Etapa",
+            etapas_filtro,
+            format_func=lambda x: "Todas" if x is None else x.nome,
+            key="filtro_etapa_lancamentos"
+        )
+
+        # ==========================
+        # BUSCA NO BANCO
+        # ==========================
+        query = session.query(models.Custo).filter(
             models.Custo.projeto_id == projeto.id
-        ).all()
+        )
 
-        if filtro:
-            filtro_lower = filtro.lower()
-            lancamentos = [
-                c for c in lancamentos
-                if (
-                    c.descricao and filtro_lower in c.descricao.lower()
-                )
-            ]
+        # 🔎 filtro por observação
+        if filtro_obs:
+            query = query.filter(
+                models.Custo.descricao.ilike(f"%{filtro_obs}%")
+            )
+
+        # 🗂️ filtro por categoria
+        if filtro_categoria:
+            query = query.filter(
+                models.Custo.categoria_id == filtro_categoria.id
+            )
+
+        # 🏗️ filtro por etapa
+        if filtro_etapa:
+            query = query.filter(
+                models.Custo.etapa_id == filtro_etapa.id
+            )
+
+        # ordenação
+        query = query.order_by(models.Custo.id.desc())
+
+        lancamentos = query.limit(50).all()
 
         # ==========================
         # EXPORTAÇÃO CSV
@@ -762,8 +941,8 @@ elif menu == "Projetos":
         # ==========================
         # TABELA
         # ==========================
-        h0, h1, h2, h3, h4, h5, h6, h7, h8 = st.columns(
-            [1,3,2,2,2,2,2,2,2]
+        h0, h1, h2, h3, h4, h5, h6, h7, h8, h9 = st.columns(
+            [1,3,2,2,2,2,2,2,2,2]
         )
 
         h0.markdown("**ID**")
@@ -773,8 +952,9 @@ elif menu == "Projetos":
         h4.markdown("**Previsto**")
         h5.markdown("**Pago**")
         h6.markdown("**Qtd**")
-        h7.markdown("**Editar**")
-        h8.markdown("**Excluir**")
+        h7.markdown("**Somar**")
+        h8.markdown("**Editar**")
+        h9.markdown("**Excluir**")
 
         if not lancamentos:
             st.info("Nenhum lançamento encontrado.")
@@ -784,8 +964,8 @@ elif menu == "Projetos":
                 valor_pago = float(c.valor_pago or 0)
                 quantidade = float(c.quantidade or 0)
 
-                col0, col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(
-                    [1,3,2,2,2,2,2,2,2]
+                col0, col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns(
+                    [1,3,2,2,2,2,2,2,2,2]
                 )
 
                 col0.write(c.id)
@@ -796,17 +976,17 @@ elif menu == "Projetos":
                 col5.write(f"R$ {valor_pago:,.2f}")
                 col6.write(quantidade)
 
-                if col7.button(
-                    "Editar",
-                    key=f"editar_lancamento_{c.id}"
-                ):
+                # SOMAR (modal)
+                if col7.button("Somar", key=f"somar_lancamento_{c.id}"):
+                    modal_somar_lancamento(c.id)
+
+                # EDITAR
+                if col8.button("Editar", key=f"editar_lancamento_{c.id}"):
                     st.session_state.editar_lancamento_id = c.id
                     st.rerun()
 
-                if col8.button(
-                    "Deletar",
-                    key=f"deletar_lancamento_{c.id}"
-                ):
+                # DELETAR
+                if col9.button("Deletar", key=f"deletar_lancamento_{c.id}"):
                     session.delete(c)
                     session.commit()
                     st.success("Lançamento deletado com sucesso!")
