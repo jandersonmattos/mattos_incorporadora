@@ -10,7 +10,11 @@ from streamlit_option_menu import option_menu
 
 session = SessionLocal()
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="Canteiro de Obras",
+    page_icon="🏗️",
+    layout="wide"
+)
 
 BASE_UPLOAD_PATH = "uploads"
 
@@ -31,6 +35,19 @@ if "editar_lancamento_id" not in st.session_state:
 
 if "somar_lancamento_id" not in st.session_state:
     st.session_state.somar_lancamento_id = None
+
+if "projeto_unidades_id" not in st.session_state:
+    st.session_state.projeto_unidades_id = None
+
+# ==========================
+# RESET DE VIEWS
+# ==========================
+def reset_views():
+    st.session_state.projeto_unidades_id = None
+    st.session_state.projeto_custos_id = None
+    st.session_state.projeto_arquivos_id = None
+    st.session_state.editar_projeto_id = None
+    st.session_state.editar_lancamento_id = None
     
 
 # ==========================
@@ -222,6 +239,50 @@ with st.sidebar:
 # ==========================
 if menu == "Dashboard":
     st.title("📊 Dashboard")
+
+    st.subheader("🌎 Visão Geral de Todos os Projetos")
+
+    import plotly.express as px
+
+    projetos_all = session.query(models.Projeto).all()
+
+    data_projetos = []
+    total_geral = 0
+
+    for p in projetos_all:
+        custos = session.query(models.Custo).filter(
+            models.Custo.projeto_id == p.id
+        ).all()
+
+        total_pago = sum([float(c.valor_pago or 0) for c in custos])
+
+        total_geral += total_pago
+
+        data_projetos.append({
+            "Projeto": p.nome,
+            "Total Pago": total_pago
+        })
+
+    # KPI total geral
+    st.metric("💰 Total Geral Investido", f"R$ {total_geral:,.2f}")
+
+    # gráfico pizza
+    df_proj = pd.DataFrame(data_projetos)
+
+    if not df_proj.empty and df_proj["Total Pago"].sum() > 0:
+        fig_proj = px.pie(
+            df_proj,
+            values="Total Pago",
+            names="Projeto",
+            hole=0.4
+        )
+
+        fig_proj.update_layout(template="plotly_white")
+
+        st.plotly_chart(fig_proj, use_container_width=True)
+    else:
+        st.info("Sem dados de custos nos projetos.")
+        
 
     projetos = session.query(models.Projeto).all()
 
@@ -517,7 +578,8 @@ elif menu == "Projetos":
 
     if (
         st.session_state.projeto_custos_id is None and
-        st.session_state.projeto_arquivos_id is None
+        st.session_state.projeto_arquivos_id is None and
+        st.session_state.projeto_unidades_id is None
     ):
 
         # ==========================
@@ -534,6 +596,11 @@ elif menu == "Projetos":
             data_inicio = st.date_input("Data de Início", value=projeto_editar.data_inicio)
             data_fim = st.date_input("Data de Fim", value=projeto_editar.data_fim)
             endereco = st.text_input("Endereço", value=projeto_editar.endereco)
+            valor_venda = st.number_input(
+                "Valor de Venda do Projeto",
+                min_value=0.0,
+                value=float(projeto_editar.valor_venda or 0)
+            )
 
             quantidade_unidades = st.number_input(
                 "Quantidade de Unidades",
@@ -549,6 +616,7 @@ elif menu == "Projetos":
                 projeto_editar.data_fim = data_fim
                 projeto_editar.endereco = endereco
                 projeto_editar.quantidade_unidades = quantidade_unidades
+                projeto_editar.valor_venda = valor_venda
 
                 session.commit()
                 st.session_state.editar_projeto_id = None
@@ -569,6 +637,11 @@ elif menu == "Projetos":
             data_inicio = st.date_input("Data de Início", value=None)
             data_fim = st.date_input("Data de Fim", value=None)
             endereco = st.text_input("Endereço")
+            valor_venda = st.number_input(
+                "Valor de Venda do Projeto",
+                min_value=0.0,
+                value=0.0
+            ) 
 
             quantidade_unidades = st.number_input(
                 "Quantidade de Unidades",
@@ -582,7 +655,8 @@ elif menu == "Projetos":
                     data_inicio=data_inicio,
                     data_fim=data_fim,
                     endereco=endereco,
-                    quantidade_unidades=quantidade_unidades
+                    quantidade_unidades=quantidade_unidades,
+                    valor_venda=valor_venda
                 ))
                 session.commit()
                 st.success("Projeto cadastrado com sucesso!")
@@ -593,41 +667,112 @@ elif menu == "Projetos":
         # ==========================
         st.subheader("Projetos cadastrados")
 
-        h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([3,2,2,3,2,2,2,2])
+        h1, h2, h3, h4, h5, h6, h7, h8, h9 = st.columns([3,2,2,2,2,2,2,2,2])
+
         h1.markdown("**Nome**")
         h2.markdown("**Período**")
         h3.markdown("**Endereço**")
         h4.markdown("**Unidades**")
-        h5.markdown("**Lançamentos**")
-        h6.markdown("**Arquivos**")
-        h7.markdown("**Editar**")
-        h8.markdown("**Excluir**")
+        h5.markdown("**Valor de Venda**")
+        h6.markdown("**Lançamentos**")
+        h7.markdown("**Arquivos**")
+        h8.markdown("**Editar**")
+        h9.markdown("**Excluir**")
 
         for p in session.query(models.Projeto).all():
-            col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([3,2,2,3,2,2,2,2])
+            col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([3,2,2,2,2,2,2,2,2])
 
             col1.write(p.nome)
             col2.write(f"{p.data_inicio} até {p.data_fim}" if p.data_fim else f"{p.data_inicio}")
             col3.write(p.endereco)
             col4.write(p.quantidade_unidades or 0)
 
-            if col5.button("Lançamentos", key=f"custos_projeto_{p.id}"):
+            if col5.button("Unidades", key=f"unidades_{p.id}"):
+                reset_views()
+                st.session_state.projeto_unidades_id = p.id
+                st.rerun()
+
+            if col6.button("Lançamentos", key=f"custos_projeto_{p.id}"):
+                reset_views()
                 st.session_state.projeto_custos_id = p.id
                 st.rerun()
 
-            if col6.button("Arquivos", key=f"arquivos_projeto_{p.id}"):
+            if col7.button("Arquivos", key=f"arquivos_projeto_{p.id}"):
+                reset_views()
                 st.session_state.projeto_arquivos_id = p.id
                 st.rerun()
 
-            if col7.button("Editar", key=f"editar_projeto_{p.id}"):
+            if col8.button("Editar", key=f"editar_projeto_{p.id}"):
+                reset_views()
                 st.session_state.editar_projeto_id = p.id
                 st.rerun()
 
-            if col8.button("Deletar", key=f"deletar_projeto_{p.id}"):
+            if col9.button("Deletar", key=f"deletar_projeto_{p.id}"):
+                reset_views()
                 session.delete(p)
                 session.commit()
                 st.success("Projeto deletado com sucesso!")
                 st.rerun()
+
+    elif st.session_state.projeto_unidades_id is not None:
+        projeto = session.query(models.Projeto).get(
+            st.session_state.projeto_unidades_id
+        )
+
+        st.subheader(f"🏠 Unidades do Projeto: {projeto.nome}")
+
+        if st.button("← Voltar para Projetos"):
+            st.session_state.projeto_unidades_id = None
+            reset_views()
+            st.rerun()
+
+        st.divider()
+
+        # ==========================
+        # NOVA UNIDADE
+        # ==========================
+        st.subheader("➕ Nova Unidade")
+
+        numero = st.text_input("Número / Identificação")
+        valor_venda = st.number_input("Valor de Venda", min_value=0.0, value=0.0)
+
+        if st.button("Salvar Unidade"):
+            session.add(models.Unidade(
+                numero=numero,
+                valor_venda=valor_venda,
+                projeto_id=projeto.id
+            ))
+            session.commit()
+            st.success("Unidade cadastrada!")
+            st.rerun()
+
+        # ==========================
+        # LISTAGEM
+        # ==========================
+        st.subheader("Unidades cadastradas")
+
+        unidades = session.query(models.Unidade).filter_by(
+            projeto_id=projeto.id
+        ).all()
+
+        if not unidades:
+            st.info("Nenhuma unidade cadastrada.")
+        else:
+            h1, h2, h3 = st.columns([3,3,2])
+            h1.markdown("**Número**")
+            h2.markdown("**Valor Venda**")
+            h3.markdown("**Ações**")
+
+            for u in unidades:
+                col1, col2, col3 = st.columns([3,3,2])
+
+                col1.write(u.numero)
+                col2.write(f"R$ {float(u.valor_venda or 0):,.2f}")
+
+                if col3.button("Deletar", key=f"del_un_{u.id}"):
+                    session.delete(u)
+                    session.commit()
+                    st.rerun()
 
     # ==========================
     # LANÇAMENTOS
@@ -906,12 +1051,17 @@ elif menu == "Projetos":
         lancamentos = query.limit(50).all()
 
         # ==========================
-        # EXPORTAÇÃO CSV
+        # EXPORTAÇÃO CSV (SEMPRE COMPLETO)
         # ==========================
-        if lancamentos:
+
+        lancamentos_export = session.query(models.Custo).filter(
+            models.Custo.projeto_id == projeto.id
+        ).order_by(models.Custo.id.desc()).all()
+
+        if lancamentos_export:
             data_export = []
 
-            for c in lancamentos:
+            for c in lancamentos_export:
                 data_export.append({
                     "ID": c.id,
                     "Observacao": c.descricao,
@@ -932,7 +1082,7 @@ elif menu == "Projetos":
             ).encode("utf-8")
 
             st.download_button(
-                label="📥 Exportar CSV",
+                label="📥 Exportar CSV (Completo)",
                 data=csv,
                 file_name=f"lancamentos_projeto_{projeto.id}.csv",
                 mime="text/csv"

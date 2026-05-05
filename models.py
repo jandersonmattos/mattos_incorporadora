@@ -14,8 +14,27 @@ class Projeto(Base):
 
     quantidade_unidades = Column(Integer, default=1)
 
+    # 🔥 NOVO
+    valor_venda = Column(Float, default=0.0)
+
     lancamentos = relationship("Custo", back_populates="projeto")
     arquivos = relationship("ArquivoProjeto", back_populates="projeto")
+
+    # 🔥 NOVO
+    unidades = relationship("Unidade", back_populates="projeto", cascade="all, delete")
+
+
+class Unidade(Base):
+    __tablename__ = "unidades"
+
+    id = Column(Integer, primary_key=True)
+
+    numero = Column(String)  # ex: Apto 101, Casa 02
+    valor_venda = Column(Float, default=0.0)
+
+    projeto_id = Column(Integer, ForeignKey("projetos.id"))
+
+    projeto = relationship("Projeto", back_populates="unidades")
 
 
 class Categoria(Base):
@@ -33,7 +52,6 @@ class Recurso(Base):
     id = Column(Integer, primary_key=True)
     nome = Column(String)
 
-    # 🔥 não usamos mais no custo (mantido só histórico)
     lancamentos = relationship("Custo", back_populates="recurso", viewonly=True)
 
 
@@ -64,20 +82,15 @@ class Custo(Base):
     projeto_id = Column(Integer, ForeignKey("projetos.id"))
     categoria_id = Column(Integer, ForeignKey("categorias.id"))
 
-    # 🔥 NOVO CAMPO (TEXTO LIVRE)
     recurso_nome = Column(String)
 
-    # 🔥 manter temporariamente para migração (pode remover depois)
     recurso_id = Column(Integer, ForeignKey("recursos.id"), nullable=True)
 
     etapa_id = Column(Integer, ForeignKey("etapas_obra.id"))
 
     projeto = relationship("Projeto", back_populates="lancamentos")
     categoria = relationship("Categoria", back_populates="lancamentos")
-
-    # 🔥 manter temporário
     recurso = relationship("Recurso", back_populates="lancamentos")
-
     etapa = relationship("EtapaObra", back_populates="lancamentos")
 
     @property
