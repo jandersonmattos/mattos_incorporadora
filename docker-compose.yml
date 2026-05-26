@@ -5,12 +5,15 @@ services:
     image: postgres:15
     container_name: postgres-incorporadora
     restart: always
+
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: incorporadora
+
     ports:
       - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -18,15 +21,20 @@ services:
     build: .
     container_name: incorporadora-app
     restart: always
+
     depends_on:
       - db
+
     ports:
-      - "8501:8501"
+      - "8000:8000"
+
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/incorporadora
+
     volumes:
       - .:/app
-    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
 
 volumes:
   postgres_data:

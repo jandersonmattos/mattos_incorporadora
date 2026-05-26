@@ -1,130 +1,1135 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Date
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    ForeignKey,
+    Float,
+    Date,
+    DateTime,
+    Boolean,
+    Text,
+    Table,
+    desc,
+    BigInteger
+)
+
+from sqlalchemy.dialects.postgresql import UUID
+
 from sqlalchemy.orm import relationship
-from database import Base
+
+from sqlalchemy.sql import func
+
+from pydantic import BaseModel
+from typing import List, Optional
+
+from datetime import datetime
+
+import uuid
+from models import *
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    name = Column(
+        String(100),
+        nullable=False
+    )
+
+    code = Column(
+        String(30),
+        nullable=False,
+        unique=True
+    )
+
+    description = Column(Text)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    versions = relationship(
+        "CostBaseVersion",
+        back_populates="cost_base",
+        cascade="all, delete-orphan"
+    )
 
 
-class Projeto(Base):
-    __tablename__ = "projetos"
+# =========================================
+# VERSÕES DAS BASES
+# =========================================
 
-    id = Column(Integer, primary_key=True)
-    nome = Column(String)
-    data_inicio = Column(Date)
-    data_fim = Column(Date, nullable=True)
-    endereco = Column(String)
+class CostBaseVersion(Base):
+    __tablename__ = "cost_base_versions"
 
-    quantidade_unidades = Column(Integer, default=1)
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
 
-    # 🔥 NOVO
-    valor_venda = Column(Float, default=0.0)
+    cost_base_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_bases.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
 
-    lancamentos = relationship("Custo", back_populates="projeto")
-    arquivos = relationship("ArquivoProjeto", back_populates="projeto")
+    state_code = Column(
+        String(2)
+    )
 
-    # 🔥 NOVO
-    unidades = relationship("Unidade", back_populates="projeto", cascade="all, delete")
+    month = Column(
+        Integer,
+        nullable=False
+    )
 
+    year = Column(
+        Integer,
+        nullable=False
+    )
 
-class Unidade(Base):
-    __tablename__ = "unidades"
+    is_desonerado = Column(
+        Boolean,
+        default=False
+    )
 
-    id = Column(Integer, primary_key=True)
+    source_file_name = Column(Text)
 
-    numero = Column(String)  # ex: Apto 101, Casa 02
-    valor_venda = Column(Float, default=0.0)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
 
-    projeto_id = Column(Integer, ForeignKey("projetos.id"))
+    cost_base = relationship(
+        "CostBase",
+        back_populates="versions"
+    )
 
-    projeto = relationship("Projeto", back_populates="unidades")
+    services = relationship(
+        "CostService",
+        back_populates="version",
+        cascade="all, delete-orphan"
+    )
 
+    inputs = relationship(
+        "CostInput",
+        back_populates="version",
+        cascade="all, delete-orphan"
+    )
 
-class Categoria(Base):
-    __tablename__ = "categorias"
-
-    id = Column(Integer, primary_key=True)
-    nome = Column(String)
-
-    lancamentos = relationship("Custo", back_populates="categoria")
-
-
-class Recurso(Base):
-    __tablename__ = "recursos"
-
-    id = Column(Integer, primary_key=True)
-    nome = Column(String)
-
-    lancamentos = relationship("Custo", back_populates="recurso", viewonly=True)
-
-
-class TipoArquivo(Base):
-    __tablename__ = "tipos_arquivo"
-
-    id = Column(Integer, primary_key=True)
-    nome = Column(String)
-
-    arquivos = relationship("ArquivoProjeto", back_populates="tipo_arquivo")
-
-
-class Custo(Base):
-    __tablename__ = "custos"
-
-    id = Column(Integer, primary_key=True)
-
-    descricao = Column(String)
-
-    quantidade = Column(Float, default=1.0)
-    valor_unitario = Column(Float, default=0.0)
-
-    valor_previsto = Column(Float, default=0.0)
-    valor_pago = Column(Float, default=0.0)
-
-    data = Column(Date)
-
-    projeto_id = Column(Integer, ForeignKey("projetos.id"))
-    categoria_id = Column(Integer, ForeignKey("categorias.id"))
-
-    recurso_nome = Column(String)
-
-    recurso_id = Column(Integer, ForeignKey("recursos.id"), nullable=True)
-
-    etapa_id = Column(Integer, ForeignKey("etapas_obra.id"))
-
-    projeto = relationship("Projeto", back_populates="lancamentos")
-    categoria = relationship("Categoria", back_populates="lancamentos")
-    recurso = relationship("Recurso", back_populates="lancamentos")
-    etapa = relationship("EtapaObra", back_populates="lancamentos")
-
-    @property
-    def saldo_restante(self):
-        return (self.valor_previsto or 0) - (self.valor_pago or 0)
+    import_jobs = relationship(
+        "ImportJob",
+        back_populates="version"
+    )
 
 
-class ArquivoProjeto(Base):
-    __tablename__ = "arquivos_projeto"
+# =========================================
+# SERVIÇOS / COMPOSIÇÕES
+# =========================================
 
-    id = Column(Integer, primary_key=True)
+class CostService(Base):
+    __tablename__ = "cost_services"
 
-    nome_arquivo = Column(String)
-    caminho_arquivo = Column(String)
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
 
-    projeto_id = Column(Integer, ForeignKey("projetos.id"))
-    tipo_arquivo_id = Column(Integer, ForeignKey("tipos_arquivo.id"))
+    version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_base_versions.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
 
-    projeto = relationship("Projeto", back_populates="arquivos")
-    tipo_arquivo = relationship("TipoArquivo", back_populates="arquivos")
+    code = Column(
+        String(50),
+        nullable=False
+    )
+
+    description = Column(
+        Text,
+        nullable=False
+    )
+
+    unit = Column(
+        String(20)
+    )
+
+    unit_cost = Column(
+        Float,
+        default=0
+    )
+
+    labor_cost = Column(
+        Float,
+        default=0
+    )
+
+    material_cost = Column(
+        Float,
+        default=0
+    )
+
+    equipment_cost = Column(
+        Float,
+        default=0
+    )
+
+    total_cost = Column(
+        Float,
+        default=0
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    version = relationship(
+        "CostBaseVersion",
+        back_populates="services"
+    )
+
+    compositions = relationship(
+        "ServiceComposition",
+        back_populates="service",
+        cascade="all, delete-orphan"
+    )
+
+    budget_items = relationship(
+        "BudgetItem",
+        back_populates="service"
+    )
 
 
-class Usuario(Base):
-    __tablename__ = "usuarios"
+# =========================================
+# INSUMOS
+# =========================================
 
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True, nullable=False)
-    senha_hash = Column(String, nullable=False)
+class CostInput(Base):
+    __tablename__ = "cost_inputs"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_base_versions.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    code = Column(
+        String(50)
+    )
+
+    description = Column(
+        Text,
+        nullable=False
+    )
+
+    unit = Column(
+        String(20)
+    )
+
+    unit_cost = Column(
+        Float,
+        default=0
+    )
+
+    input_type = Column(
+        String(30)
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    version = relationship(
+        "CostBaseVersion",
+        back_populates="inputs"
+    )
+
+    compositions = relationship(
+        "ServiceComposition",
+        back_populates="input"
+    )
+
+    custom_prices = relationship(
+        "CompanyInputPrice",
+        back_populates="input"
+    )
 
 
-class EtapaObra(Base):
-    __tablename__ = "etapas_obra"
+# =========================================
+# COMPOSIÇÃO DOS SERVIÇOS
+# =========================================
 
-    id = Column(Integer, primary_key=True)
-    nome = Column(String, nullable=False)
+class ServiceComposition(Base):
+    __tablename__ = "service_compositions"
 
-    lancamentos = relationship("Custo", back_populates="etapa")
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    service_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_services.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    input_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_inputs.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    coefficient = Column(
+        Float,
+        default=0
+    )
+
+    unit = Column(
+        String(20)
+    )
+
+    unit_cost = Column(
+        Float,
+        default=0
+    )
+
+    total_cost = Column(
+        Float,
+        default=0
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    service = relationship(
+        "CostService",
+        back_populates="compositions"
+    )
+
+    input = relationship(
+        "CostInput",
+        back_populates="compositions"
+    )
+
+
+# =========================================
+# PREÇOS CUSTOMIZADOS DE INSUMOS
+# =========================================
+
+class CompanyInputPrice(Base):
+    __tablename__ = "company_input_prices"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    input_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_inputs.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    supplier_name = Column(
+        String(255)
+    )
+
+    custom_cost = Column(
+        Float,
+        nullable=False
+    )
+
+    valid_from = Column(Date)
+
+    valid_to = Column(Date)
+
+    notes = Column(Text)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    input = relationship(
+        "CostInput",
+        back_populates="custom_prices"
+    )
+
+
+# =========================================
+# ORÇAMENTOS
+# =========================================
+
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    number = Column(
+        String(50),
+        nullable=False,
+        unique=True
+    )
+
+    type = Column(
+        String(20),
+        nullable=False
+    )
+
+    client_name = Column(
+        String(255)
+    )
+
+    project_name = Column(
+        String(255)
+    )
+
+    status = Column(
+        String(30),
+        default="DRAFT"
+    )
+
+    total_cost = Column(
+        Float,
+        default=0
+    )
+
+    total_sale = Column(
+        Float,
+        default=0
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    items = relationship(
+        "BudgetItem",
+        back_populates="budget",
+        cascade="all, delete-orphan"
+    )
+
+    bdi_links = relationship(
+        "BudgetBDITemplateLink",
+        back_populates="budget",
+        cascade="all, delete-orphan"
+    )
+
+    schedules = relationship(
+        "BudgetSchedule",
+        back_populates="budget",
+        cascade="all, delete-orphan"
+    )
+
+# =========================================
+# ITENS DO ORÇAMENTO
+# =========================================
+
+class BudgetItem(Base):
+    __tablename__ = "budget_items"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    budget_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budgets.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    # =========================================
+    # HIERARQUIA
+    # =========================================
+
+    parent_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_items.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
+    )
+
+    hierarchy_level = Column(
+        Integer,
+        default=1
+    )
+
+    sort_order = Column(
+        Integer,
+        default=0
+    )
+
+    is_group = Column(
+        Boolean,
+        default=False
+    )
+
+    # =========================================
+    # ITEM
+    # =========================================
+
+    item_order = Column(Integer)
+
+    item_code = Column(
+        String(50)
+    )
+
+    description = Column(
+        Text,
+        nullable=False
+    )
+
+    unit = Column(
+        String(20)
+    )
+
+    quantity = Column(
+        Float,
+        default=0
+    )
+
+    # =========================================
+    # CUSTOS
+    # =========================================
+
+    # valor original vindo da base SINAPI/SICRO/etc
+    base_unit_cost = Column(
+        Float,
+        default=0
+    )
+
+    # valor final editado no orçamento
+    unit_cost = Column(
+        Float,
+        default=0
+    )
+
+    bdi_percentage = Column(
+        Float,
+        default=0
+    )
+
+    sale_price = Column(
+        Float,
+        default=0
+    )
+
+    total_cost = Column(
+        Float,
+        default=0
+    )
+
+    total_sale = Column(
+        Float,
+        default=0
+    )
+
+    # =========================================
+    # SERVIÇO VINCULADO
+    # =========================================
+
+    service_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_services.id"
+        ),
+        nullable=True
+    )
+
+    # =========================================
+    # DATAS
+    # =========================================
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    # =========================================
+    # RELACIONAMENTOS
+    # =========================================
+
+    budget = relationship(
+        "Budget",
+        back_populates="items"
+    )
+
+    service = relationship(
+        "CostService",
+        back_populates="budget_items"
+    )
+
+    parent = relationship(
+        "BudgetItem",
+        remote_side=[id]
+    )
+
+
+# =========================================
+# TEMPLATES BDI
+# =========================================
+
+class BudgetBDITemplate(Base):
+    __tablename__ = "budget_bdi_templates"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    name = Column(
+        String(255),
+        nullable=False
+    )
+
+    percentage = Column(
+        Float,
+        nullable=False
+    )
+
+    description = Column(Text)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    budget_links = relationship(
+        "BudgetBDITemplateLink",
+        back_populates="bdi_template"
+    )
+
+
+# =========================================
+# RELAÇÃO ORÇAMENTO -> BDI
+# =========================================
+
+class BudgetBDITemplateLink(Base):
+    __tablename__ = "budget_bdi_template_links"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    budget_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budgets.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    bdi_template_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_bdi_templates.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    budget = relationship(
+        "Budget",
+        back_populates="bdi_links"
+    )
+
+    bdi_template = relationship(
+        "BudgetBDITemplate",
+        back_populates="budget_links"
+    )
+
+
+# =========================================
+# IMPORTAÇÕES
+# =========================================
+
+class ImportJob(Base):
+    __tablename__ = "import_jobs"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    cost_base_version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "cost_base_versions.id",
+            ondelete="SET NULL"
+        ),
+        nullable=True
+    )
+
+    status = Column(
+        String(30),
+        nullable=False
+    )
+
+    file_name = Column(Text)
+
+    total_services = Column(
+        Integer,
+        default=0
+    )
+
+    total_inputs = Column(
+        Integer,
+        default=0
+    )
+
+    error_message = Column(Text)
+
+    started_at = Column(
+        DateTime(timezone=True)
+    )
+
+    finished_at = Column(
+        DateTime(timezone=True)
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    version = relationship(
+        "CostBaseVersion",
+        back_populates="import_jobs"
+    )
+
+# =========================================
+# CRONOGRAMAS
+# =========================================
+
+class BudgetSchedule(Base):
+    __tablename__ = "budget_schedules"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    budget_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budgets.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    name = Column(
+        String(255),
+        nullable=False
+    )
+
+    description = Column(Text)
+
+    start_date = Column(Date)
+
+    end_date = Column(Date)
+
+    baseline_start_date = Column(Date)
+
+    baseline_end_date = Column(Date)
+
+    status = Column(
+        String(30),
+        default="PLANNING"
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    budget = relationship(
+        "Budget"
+    )
+
+    tasks = relationship(
+        "BudgetScheduleTask",
+        back_populates="schedule",
+        cascade="all, delete-orphan",
+        order_by="BudgetScheduleTask.sort_order"
+    )
+
+    budget = relationship(
+        "Budget",
+        back_populates="schedules"
+    )
+
+
+
+# =========================================
+# TAREFAS
+# =========================================
+
+class BudgetScheduleTask(Base):
+    __tablename__ = "budget_schedule_tasks"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    schedule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_schedules.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    parent_task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_schedule_tasks.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
+    )
+
+    budget_item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_items.id",
+            ondelete="SET NULL"
+        ),
+        nullable=True
+    )
+
+    hierarchy_level = Column(
+        Integer,
+        default=1
+    )
+
+    sort_order = Column(
+        Integer,
+        default=0
+    )
+
+    is_group = Column(
+        Boolean,
+        default=False
+    )
+
+    code = Column(String(50))
+
+    name = Column(
+        Text,
+        nullable=False
+    )
+
+    description = Column(Text)
+
+    task_type = Column(
+        String(30),
+        default="TASK"
+    )
+
+    duration_days = Column(
+        Integer,
+        default=0
+    )
+
+    progress_percentage = Column(
+        Float,
+        default=0
+    )
+
+    start_date = Column(Date)
+
+    end_date = Column(Date)
+
+    actual_start_date = Column(Date)
+
+    actual_end_date = Column(Date)
+
+    baseline_start_date = Column(Date)
+
+    baseline_end_date = Column(Date)
+
+    planned_cost = Column(
+        Float,
+        default=0
+    )
+
+    actual_cost = Column(
+        Float,
+        default=0
+    )
+
+    responsible = Column(String(255))
+
+    color = Column(String(20))
+
+    notes = Column(Text)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    schedule = relationship(
+        "BudgetSchedule",
+        back_populates="tasks"
+    )
+
+    budget_item = relationship(
+        "BudgetItem"
+    )
+
+    parent = relationship(
+        "BudgetScheduleTask",
+        remote_side=[id]
+    )
+
+    predecessors = relationship(
+        "BudgetScheduleDependency",
+        foreign_keys="BudgetScheduleDependency.successor_task_id",
+        cascade="all, delete-orphan"
+    )
+
+    successors = relationship(
+        "BudgetScheduleDependency",
+        foreign_keys="BudgetScheduleDependency.predecessor_task_id",
+        cascade="all, delete-orphan"
+    )
+
+
+# =========================================
+# DEPENDÊNCIAS
+# =========================================
+
+class BudgetScheduleDependency(Base):
+    __tablename__ = "budget_schedule_dependencies"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    schedule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_schedules.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    predecessor_task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_schedule_tasks.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    successor_task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "budget_schedule_tasks.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    dependency_type = Column(
+        String(10),
+        default="FS"
+    )
+
+    lag_days = Column(
+        Integer,
+        default=0
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    predecessor_task = relationship(
+        "BudgetScheduleTask",
+        foreign_keys=[predecessor_task_id]
+    )
+
+    successor_task = relationship(
+        "BudgetScheduleTask",
+        foreign_keys=[successor_task_id]
+    )
+
+# =========================================================
+# PASTAS
+# =========================================================
+
+class ProjectFolder(Base):
+
+    __tablename__ = "project_folders"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    project_id = Column(
+        Integer,
+        ForeignKey("projetos.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    parent_folder_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "project_folders.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
+    )
+
+    name = Column(String)
+
+    created_by = Column(String)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+# =========================================================
+# ARQUIVOS
+# =========================================================
+
+class ProjectFile(Base):
+
+    __tablename__ = "project_files"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    project_id = Column(
+        Integer,
+        ForeignKey("projetos.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    folder_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "project_folders.id",
+            ondelete="CASCADE"
+        ),
+        nullable=True
+    )
+
+    file_name = Column(String)
+
+    original_name = Column(String)
+
+    file_url = Column(Text)
+
+    file_size = Column(BigInteger)
+
+    mime_type = Column(String)
+
+    extension = Column(String)
+
+    uploaded_by = Column(String)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
