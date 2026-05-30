@@ -454,3 +454,97 @@ def patch_stage_cost(
         data=data,
         db=db
     )
+
+
+@router.delete("/costs/{cost_id}")
+def delete_cost(cost_id: str, db: Session = Depends(get_db)):
+    parsed_cost_id = _parse_uuid(cost_id, "cost_id")
+
+    custo = (
+        db.query(models.Custo)
+        .filter(models.Custo.id == parsed_cost_id)
+        .first()
+    )
+
+    if not custo:
+        raise HTTPException(status_code=404, detail="Custo nao encontrado")
+
+    db.delete(custo)
+    db.commit()
+
+    return {
+        "message": "Custo deletado com sucesso",
+        "id": str(custo.id),
+    }
+
+
+@router.delete("/projects/{project_id}/costs/{cost_id}")
+def delete_project_cost(
+    project_id: str,
+    cost_id: str,
+    db: Session = Depends(get_db)
+):
+    parsed_cost_id = _parse_uuid(cost_id, "cost_id")
+
+    custo = (
+        db.query(models.Custo)
+        .filter(
+            models.Custo.id == parsed_cost_id,
+            models.Custo.projeto_id == project_id
+        )
+        .first()
+    )
+
+    if not custo:
+        raise HTTPException(status_code=404, detail="Custo nao encontrado")
+
+    db.delete(custo)
+    db.commit()
+
+    return {
+        "message": "Custo deletado com sucesso",
+        "id": str(custo.id),
+    }
+
+
+@router.delete("/projects/{project_id}/stages/{project_stage_id}/costs/{cost_id}")
+def delete_stage_cost(
+    project_id: str,
+    project_stage_id: str,
+    cost_id: str,
+    db: Session = Depends(get_db)
+):
+    parsed_cost_id = _parse_uuid(cost_id, "cost_id")
+
+    projeto_etapa = (
+        db.query(models.ProjetoEtapa)
+        .filter(
+            models.ProjetoEtapa.id == project_stage_id,
+            models.ProjetoEtapa.projeto_id == project_id
+        )
+        .first()
+    )
+
+    if not projeto_etapa:
+        raise HTTPException(status_code=404, detail="Etapa do projeto nao encontrada")
+
+    custo = (
+        db.query(models.Custo)
+        .filter(
+            models.Custo.id == parsed_cost_id,
+            models.Custo.projeto_id == project_id,
+            models.Custo.etapa_id == projeto_etapa.etapa_id
+        )
+        .first()
+    )
+
+    if not custo:
+        raise HTTPException(status_code=404, detail="Custo nao encontrado nessa etapa")
+
+    db.delete(custo)
+    db.commit()
+
+    return {
+        "message": "Custo deletado com sucesso",
+        "id": str(custo.id),
+    }

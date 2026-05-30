@@ -315,3 +315,52 @@ def delete_stage_item(
         "message": "Item deletado com sucesso",
         "id": str(item.id),
     }
+
+
+@router.delete("/projects/{project_id}/stages/{project_stage_id}/items/{item_id}")
+def delete_stage_item_scoped(
+    project_id: str,
+    project_stage_id: str,
+    item_id: str,
+    db: Session = Depends(get_db)
+):
+    parsed_item_id = _parse_uuid(item_id, "item_id")
+
+    projeto_etapa = (
+        db.query(models.ProjetoEtapa)
+        .filter(
+            models.ProjetoEtapa.id == project_stage_id,
+            models.ProjetoEtapa.projeto_id == project_id
+        )
+        .first()
+    )
+
+    if not projeto_etapa:
+        raise HTTPException(
+            status_code=404,
+            detail="Etapa do projeto nao encontrada"
+        )
+
+    item = (
+        db.query(models.ItemEtapa)
+        .filter(
+            models.ItemEtapa.id == parsed_item_id,
+            models.ItemEtapa.projeto_id == project_id,
+            models.ItemEtapa.etapa_id == projeto_etapa.etapa_id,
+        )
+        .first()
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Item nao encontrado nessa etapa"
+        )
+
+    db.delete(item)
+    db.commit()
+
+    return {
+        "message": "Item deletado com sucesso",
+        "id": str(item.id),
+    }
