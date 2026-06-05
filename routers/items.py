@@ -286,6 +286,129 @@ def patch_stage_item_scoped(
 
 
 # =============================================
+# MIGRAR ITENS (E CUSTOS VINCULADOS) ENTRE ETAPAS
+# =============================================
+
+@router.post("/projects/{project_id}/stages/{source_project_stage_id}/items/migrate")
+def migrate_stage_items(
+    project_id: str,
+    source_project_stage_id: str,
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    target_project_stage_id = data.get("target_project_stage_id")
+
+    if not target_project_stage_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Campo 'target_project_stage_id' e obrigatorio"
+        )
+
+    source_project_stage = (
+        db.query(models.ProjetoEtapa)
+        .filter(
+            models.ProjetoEtapa.id == source_project_stage_id,
+            models.ProjetoEtapa.projeto_id == project_id
+        )
+        .first()
+    )
+
+    if not source_project_stage:
+        raise HTTPException(
+            status_code=404,
+            detail="Etapa de origem do projeto nao encontrada"
+        )
+
+    target_project_stage = (
+        db.query(models.ProjetoEtapa)
+        .filter(
+            models.ProjetoEtapa.id == target_project_stage_id,
+            models.ProjetoEtapa.projeto_id == project_id
+        )
+        .first()
+    )
+
+    if not target_project_stage:
+        raise HTTPException(
+            status_code=404,
+            detail="Etapa de destino do projeto nao encontrada"
+        )
+
+    if source_project_stage.id == target_project_stage.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Etapa de origem e destino nao podem ser iguais"
+        )
+
+    if not source_project_stage.etapa_id or not target_project_stage.etapa_id:
+        raise HTTPException(
+            status_code=400,
+            detail="As etapas precisam ter etapa_id valido para migracao"
+        )
+
+    requested_item_ids = data.get("item_ids")
+    query = (
+        db.query(models.ItemEtapa)
+        .filter(
+            models.ItemEtapa.projeto_id == project_id,
+            models.ItemEtapa.etapa_id == source_project_stage.etapa_id
+        )
+    )
+
+    if requested_item_ids is not None:
+        if not isinstance(requested_item_ids, list) or len(requested_item_ids) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Campo 'item_ids' deve ser uma lista nao vazia"
+            )
+
+        parsed_item_ids = []
+        for raw_item_id in requested_item_ids:
+            parsed_item_ids.append(_parse_uuid(raw_item_id, "item_id"))
+
+        query = query.filter(models.ItemEtapa.id.in_(parsed_item_ids))
+
+    items = query.all()
+
+    if not items:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum item encontrado para migracao"
+        )
+
+    migrated_item_ids = [item.id for item in items]
+
+    for item in items:
+        item.etapa_id = target_project_stage.etapa_id
+
+    migrated_costs_count = (
+        db.query(models.Custo)
+        .filter(
+            models.Custo.projeto_id == project_id,
+            models.Custo.item_id.in_(migrated_item_ids)
+        )
+        .update(
+            {models.Custo.etapa_id: target_project_stage.etapa_id},
+            synchronize_session=False
+        )
+    )
+
+    db.commit()
+
+    return {
+        "message": "Itens migrados com sucesso",
+        "project_id": project_id,
+        "source_project_stage_id": source_project_stage_id,
+        "target_project_stage_id": target_project_stage_id,
+        "source_etapa_id": str(source_project_stage.etapa_id),
+        "target_etapa_id": str(target_project_stage.etapa_id),
+        "migrated_items_count": len(migrated_item_ids),
+        "migrated_costs_count": migrated_costs_count,
+        "migrated_item_ids": [str(item_id) for item_id in migrated_item_ids],
+    }
+
+
+# =============================================
 # DELETAR ITEM (e seus subitens em cascade)
 # =============================================
 

@@ -253,6 +253,43 @@ def get_stage_costs(
     return response
 
 
+@router.get("/projects/{project_id}/costs/a-pagar")
+def get_project_costs_a_pagar(project_id: str, db: Session = Depends(get_db)):
+    projeto = (
+        db.query(models.Projeto)
+        .filter(models.Projeto.id == project_id)
+        .first()
+    )
+
+    if not projeto:
+        raise HTTPException(status_code=404, detail="Projeto nao encontrado")
+
+    custos = (
+        db.query(models.Custo)
+        .filter(
+            models.Custo.projeto_id == project_id,
+            models.Custo.valor_previsto > models.Custo.valor_pago,
+        )
+        .order_by(models.Custo.etapa_id, models.Custo.data.desc(), models.Custo.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": str(custo.id),
+            "descricao": custo.descricao,
+            "recurso_nome": custo.recurso_nome,
+            "valor_previsto": custo.valor_previsto,
+            "valor_pago": custo.valor_pago,
+            "saldo_a_pagar": custo.saldo_restante,
+            "data": custo.data.isoformat() if custo.data else None,
+            "etapa_id": str(custo.etapa_id) if custo.etapa_id else None,
+            "etapa_nome": custo.etapa.nome if custo.etapa else None,
+        }
+        for custo in custos
+    ]
+
+
 def _apply_cost_updates(custo: models.Custo, data: dict, db: Session):
     if "data" in data:
         if data.get("data"):
