@@ -96,6 +96,9 @@ def get_project_stages(
                 "concluida":
                     item.concluida,
 
+                "progresso":
+                    item.progresso,
+
                 "data_inicio_prevista":
                     item.data_inicio_prevista,
 
@@ -140,6 +143,9 @@ def get_project_stages(
 
                 "concluida":
                     item.concluida,
+
+                "progresso":
+                    item.progresso,
 
                 "data_inicio_prevista":
                     item.data_inicio_prevista,
@@ -393,6 +399,33 @@ def update_project_stage(
 
     if "concluida" in data:
         projeto_etapa.concluida = data.get("concluida")
+
+    if "progresso" in data:
+
+        progresso = data.get("progresso")
+
+        if progresso is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Campo 'progresso' é obrigatório"
+            )
+
+        try:
+            progresso = float(progresso)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Progresso deve ser um número"
+            )
+
+        if progresso < 0 or progresso > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Progresso deve estar entre 0 e 100"
+            )
+
+        projeto_etapa.progresso = progresso
+        projeto_etapa.concluida = progresso >= 100
 
     if "data_inicio_prevista" in data:
         if data.get("data_inicio_prevista"):

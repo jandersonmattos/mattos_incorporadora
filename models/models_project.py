@@ -169,6 +169,13 @@ class ProjetoEtapa(Base):
         default=False
     )
 
+    # Percentual de execução da etapa (0 a 100)
+    progresso = Column(
+        Float,
+        nullable=False,
+        default=0.0
+    )
+
     # =========================================
     # PERIODO PREVISTO
     # =========================================

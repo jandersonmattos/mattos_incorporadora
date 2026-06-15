@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import SessionLocal
 import models
 import base64
@@ -27,32 +28,21 @@ def get_projects(
 
     for projeto in projetos:
 
-        custos = (
-            db.query(models.Custo)
-            .filter(
-                models.Custo.projeto_id == projeto.id
+        # Progresso do projeto = media do progresso das etapas (0 a 100)
+        media_progresso = (
+            db.query(
+                func.coalesce(
+                    func.avg(models.ProjetoEtapa.progresso),
+                    0.0
+                )
             )
-            .all()
+            .filter(
+                models.ProjetoEtapa.projeto_id == projeto.id
+            )
+            .scalar()
         )
 
-        total_pago = sum([
-            c.valor_pago or 0
-            for c in custos
-        ])
-
-        total_previsto = sum([
-            c.valor_previsto or 0
-            for c in custos
-        ])
-
-        progresso = 0
-
-        if total_previsto > 0:
-
-            progresso = round(
-                (total_pago / total_previsto) * 100,
-                2
-            )
+        progresso = round(float(media_progresso or 0), 2)
 
         imagem = None
 
