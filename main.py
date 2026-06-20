@@ -26,6 +26,7 @@ from routers import (
     project_detail,
     project_update,
     projects,
+    reminders,
     stages,
     supplier_types,
     suppliers,
@@ -159,6 +160,7 @@ app.include_router(items.router)
 app.include_router(budgets.router)
 app.include_router(folders.router)
 app.include_router(files.router)
+app.include_router(reminders.router)
 
 # ---------------------------------------------------------------------------
 # Endpoints
