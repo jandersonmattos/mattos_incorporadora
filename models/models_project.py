@@ -125,6 +125,12 @@ class Projeto(Base):
         back_populates="projeto"
     )
 
+    lembretes = relationship(
+        "LembreteProjeto",
+        back_populates="projeto",
+        cascade="all, delete-orphan"
+    )
+
 
 class ProjetoEtapa(Base):
     __tablename__ = "projeto_etapas"
@@ -238,4 +244,82 @@ class Unidade(Base):
     projeto = relationship(
         "Projeto",
         back_populates="unidades"
+    )
+
+
+class LembreteProjeto(Base):
+    __tablename__ = "lembretes_projeto"
+
+    id = Column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4())
+    )
+
+    projeto_id = Column(
+        String,
+        ForeignKey(
+            "projetos.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False,
+        index=True
+    )
+
+    descricao = Column(
+        Text,
+        nullable=False
+    )
+
+    recorrente = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+
+    tipo_recorrencia = Column(
+        String,
+        nullable=True
+    )
+
+    dia_semana = Column(
+        String,
+        nullable=True
+    )
+
+    dia_mes = Column(
+        Integer,
+        nullable=True
+    )
+
+    data_especifica = Column(
+        Date,
+        nullable=True
+    )
+
+    ativo = Column(
+        Boolean,
+        nullable=False,
+        default=True
+    )
+
+    ultimo_envio_em = Column(
+        Date,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    projeto = relationship(
+        "Projeto",
+        back_populates="lembretes"
     )
