@@ -30,11 +30,29 @@ services:
 
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/incorporadora
+      REMINDER_FIXED_RECIPIENTS: mattosincorporadoraltda@gmail.com,janderson.candido@gmail.com
 
     volumes:
       - .:/app
 
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  reminder_scheduler:
+    build: .
+    container_name: incorporadora-reminder-scheduler
+    restart: always
+
+    depends_on:
+      - app
+
+    environment:
+      API_BASE_URL: http://app:8000
+      REMINDER_SCHEDULE_TIME: "08:00"
+
+    volumes:
+      - .:/app
+
+    command: python scripts/send_due_reminders_daily.py
 
 volumes:
   postgres_data:
