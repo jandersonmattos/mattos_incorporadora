@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, date
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -478,10 +479,10 @@ def send_project_reminder(
 
 @router.post("/reminders/send-due")
 def send_due_reminders(
-    data: dict,
+    data: Optional[dict] = None,
     db: Session = Depends(get_db)
 ):
-    data_referencia_str = data.get("data_referencia")
+    data_referencia_str = (data or {}).get("data_referencia")
     data_referencia = date.today()
 
     if data_referencia_str:
