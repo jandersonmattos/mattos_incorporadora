@@ -1,17 +1,22 @@
 import logging
-import smtplib
+import os
 
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
 
 logger = logging.getLogger(__name__)
 
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+MAILGUN_API_KEY = os.getenv(
+    "MAILGUN_API_KEY",
+    "c7c923cd3555ae631fd720941028cfe1-0b3150f2-ec10562a"
+)
+MAILGUN_DOMAIN = os.getenv(
+    "MAILGUN_DOMAIN",
+    "sandbox872888764c2044c4b0311b3a5b8b3790.mailgun.org"
+)
 
-EMAIL_REMETENTE = "janderson.candido@gmail.com"
-EMAIL_SENHA = "lzyf dqag yhgx vuek"
+EMAIL_REMETENTE = f"noreply@{MAILGUN_DOMAIN}"
+MAILGUN_API_URL = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages"
 
 
 def enviar_codigo_recuperacao(
@@ -19,11 +24,7 @@ def enviar_codigo_recuperacao(
     codigo: str
 ):
 
-    mensagem = MIMEMultipart("alternative")
-
-    mensagem["From"] = f"Canteiro de Obras <{EMAIL_REMETENTE}>"
-    mensagem["To"] = email_destino
-    mensagem["Subject"] = "Recuperação de senha"
+    assunto = "Recuperação de senha"
 
     corpo_texto = f"""
     Recuperação de senha
@@ -259,35 +260,27 @@ def enviar_codigo_recuperacao(
     </html>
     """
 
-    mensagem.attach(
-        MIMEText(corpo_texto, "plain", "utf-8")
-    )
-
-    mensagem.attach(
-        MIMEText(corpo_html, "html", "utf-8")
-    )
-
     try:
-        servidor = smtplib.SMTP(
-            SMTP_HOST,
-            SMTP_PORT,
+        response = requests.post(
+            MAILGUN_API_URL,
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": f"Canteiro de Obras <{EMAIL_REMETENTE}>",
+                "to": email_destino,
+                "subject": assunto,
+                "text": corpo_texto,
+                "html": corpo_html,
+            },
             timeout=10
         )
 
-        servidor.starttls()
+        response.raise_for_status()
 
-        servidor.login(
-            EMAIL_REMETENTE,
-            EMAIL_SENHA
-        )
-
-        servidor.sendmail(
-            EMAIL_REMETENTE,
+        logger.info(
+            "E-mail de recuperacao enviado para %s (status %s)",
             email_destino,
-            mensagem.as_string()
+            response.status_code
         )
-
-        servidor.quit()
 
     except Exception as e:
         logger.error(
@@ -306,11 +299,7 @@ def enviar_email_lembrete(
     tipo_recorrencia: str = None
 ):
 
-    mensagem = MIMEMultipart("alternative")
-
-    mensagem["From"] = f"Canteiro de Obras <{EMAIL_REMETENTE}>"
-    mensagem["To"] = email_destino
-    mensagem["Subject"] = f"Lembrete: {nome_projeto}"
+    assunto = f"Lembrete: {nome_projeto}"
 
     recorrencia_label = ""
     if recorrente and tipo_recorrencia:
@@ -616,35 +605,27 @@ def enviar_email_lembrete(
     </html>
     """
 
-    mensagem.attach(
-        MIMEText(corpo_texto, "plain", "utf-8")
-    )
-
-    mensagem.attach(
-        MIMEText(corpo_html, "html", "utf-8")
-    )
-
     try:
-        servidor = smtplib.SMTP(
-            SMTP_HOST,
-            SMTP_PORT,
+        response = requests.post(
+            MAILGUN_API_URL,
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": f"Canteiro de Obras <{EMAIL_REMETENTE}>",
+                "to": email_destino,
+                "subject": assunto,
+                "text": corpo_texto,
+                "html": corpo_html,
+            },
             timeout=10
         )
 
-        servidor.starttls()
+        response.raise_for_status()
 
-        servidor.login(
-            EMAIL_REMETENTE,
-            EMAIL_SENHA
-        )
-
-        servidor.sendmail(
-            EMAIL_REMETENTE,
+        logger.info(
+            "E-mail de lembrete enviado para %s (status %s)",
             email_destino,
-            mensagem.as_string()
+            response.status_code
         )
-
-        servidor.quit()
 
     except Exception as e:
         logger.error(
