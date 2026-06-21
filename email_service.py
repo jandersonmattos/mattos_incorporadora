@@ -1,7 +1,10 @@
+import logging
 import smtplib
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
+logger = logging.getLogger(__name__)
 
 
 SMTP_HOST = "smtp.gmail.com"
@@ -264,25 +267,34 @@ def enviar_codigo_recuperacao(
         MIMEText(corpo_html, "html", "utf-8")
     )
 
-    servidor = smtplib.SMTP(
-        SMTP_HOST,
-        SMTP_PORT
-    )
+    try:
+        servidor = smtplib.SMTP(
+            SMTP_HOST,
+            SMTP_PORT,
+            timeout=10
+        )
 
-    servidor.starttls()
+        servidor.starttls()
 
-    servidor.login(
-        EMAIL_REMETENTE,
-        EMAIL_SENHA
-    )
+        servidor.login(
+            EMAIL_REMETENTE,
+            EMAIL_SENHA
+        )
 
-    servidor.sendmail(
-        EMAIL_REMETENTE,
-        email_destino,
-        mensagem.as_string()
-    )
+        servidor.sendmail(
+            EMAIL_REMETENTE,
+            email_destino,
+            mensagem.as_string()
+        )
 
-    servidor.quit()
+        servidor.quit()
+
+    except Exception as e:
+        logger.error(
+            "Falha ao enviar e-mail de recuperacao para %s: %s",
+            email_destino,
+            e
+        )
 
 
 def enviar_email_lembrete(
@@ -612,22 +624,31 @@ def enviar_email_lembrete(
         MIMEText(corpo_html, "html", "utf-8")
     )
 
-    servidor = smtplib.SMTP(
-        SMTP_HOST,
-        SMTP_PORT
-    )
+    try:
+        servidor = smtplib.SMTP(
+            SMTP_HOST,
+            SMTP_PORT,
+            timeout=10
+        )
 
-    servidor.starttls()
+        servidor.starttls()
 
-    servidor.login(
-        EMAIL_REMETENTE,
-        EMAIL_SENHA
-    )
+        servidor.login(
+            EMAIL_REMETENTE,
+            EMAIL_SENHA
+        )
 
-    servidor.sendmail(
-        EMAIL_REMETENTE,
-        email_destino,
-        mensagem.as_string()
-    )
+        servidor.sendmail(
+            EMAIL_REMETENTE,
+            email_destino,
+            mensagem.as_string()
+        )
 
-    servidor.quit()
+        servidor.quit()
+
+    except Exception as e:
+        logger.error(
+            "Falha ao enviar e-mail de lembrete para %s: %s",
+            email_destino,
+            e
+        )
