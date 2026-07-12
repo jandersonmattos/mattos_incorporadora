@@ -1,22 +1,44 @@
-import logging
 import os
+from datetime import date
 
-import requests
-
-logger = logging.getLogger(__name__)
-
-
-MAILGUN_API_KEY = os.getenv(
-    "MAILGUN_API_KEY",
-    "c7c923cd3555ae631fd720941028cfe1-0b3150f2-ec10562a"
-)
-MAILGUN_DOMAIN = os.getenv(
-    "MAILGUN_DOMAIN",
-    "sandbox872888764c2044c4b0311b3a5b8b3790.mailgun.org"
+from brevo import Brevo
+from brevo.transactional_emails import (
+    SendTransacEmailRequestSender,
+    SendTransacEmailRequestToItem,
 )
 
-EMAIL_REMETENTE = f"noreply@{MAILGUN_DOMAIN}"
-MAILGUN_API_URL = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages"
+
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+EMAIL_REMETENTE = os.getenv("EMAIL_REMETENTE", "")
+EMAIL_REMETENTE_NOME = os.getenv("EMAIL_REMETENTE_NOME", "Canteiro de Obras")
+
+
+def _enviar_email_brevo(
+    email_destino: str,
+    assunto: str,
+    html_content: str
+):
+    if not BREVO_API_KEY:
+        raise ValueError("BREVO_API_KEY nao configurada.")
+
+    if not EMAIL_REMETENTE:
+        raise ValueError("EMAIL_REMETENTE nao configurado.")
+
+    client = Brevo(api_key=BREVO_API_KEY)
+
+    client.transactional_emails.send_transac_email(
+        subject=assunto,
+        html_content=html_content,
+        sender=SendTransacEmailRequestSender(
+            name=EMAIL_REMETENTE_NOME,
+            email=EMAIL_REMETENTE,
+        ),
+        to=[
+            SendTransacEmailRequestToItem(
+                email=email_destino,
+            )
+        ],
+    )
 
 
 def enviar_codigo_recuperacao(
@@ -24,7 +46,7 @@ def enviar_codigo_recuperacao(
     codigo: str
 ):
 
-    assunto = "Recuperação de senha"
+    assunto = "Recuperacao de senha"
 
     corpo_texto = f"""
     Recuperação de senha
@@ -260,71 +282,40 @@ def enviar_codigo_recuperacao(
     </html>
     """
 
-    try:
-        response = requests.post(
-            MAILGUN_API_URL,
-            auth=("api", MAILGUN_API_KEY),
-            data={
-                "from": f"Canteiro de Obras <{EMAIL_REMETENTE}>",
-                "to": email_destino,
-                "subject": assunto,
-                "text": corpo_texto,
-                "html": corpo_html,
-            },
-            timeout=10
-        )
-
-        response.raise_for_status()
-
-        logger.info(
-            "E-mail de recuperacao enviado para %s (status %s)",
-            email_destino,
-            response.status_code
-        )
-
-    except Exception as e:
-        logger.error(
-            "Falha ao enviar e-mail de recuperacao para %s: %s",
-            email_destino,
-            e
-        )
+    _enviar_email_brevo(
+        email_destino=email_destino,
+        assunto=assunto,
+        html_content=corpo_html,
+    )
 
 
 def enviar_email_lembrete(
     email_destino: str,
     nome_projeto: str,
     descricao: str,
-    data_referencia,
+    data_referencia: date,
     recorrente: bool,
     tipo_recorrencia: str = None
 ):
 
-    assunto = f"Lembrete: {nome_projeto}"
+    assunto = f"Lembrete do projeto: {nome_projeto}"
 
-    recorrencia_label = ""
-    if recorrente and tipo_recorrencia:
-        recorrencia_label = tipo_recorrencia.capitalize()
-    elif recorrente:
-        recorrencia_label = "Sim"
-    else:
-        recorrencia_label = "Não"
+    tipo = "Data especifica"
 
-    data_formatada = (
-        data_referencia.strftime("%d/%m/%Y")
-        if hasattr(data_referencia, "strftime")
-        else str(data_referencia)
-    )
+    if recorrente:
+        if tipo_recorrencia == "semanal":
+            tipo = "Recorrente semanal"
+        elif tipo_recorrencia == "mensal":
+            tipo = "Recorrente mensal"
 
     corpo_texto = f"""
-    Lembrete de Projeto — {nome_projeto}
+    Lembrete do projeto: {nome_projeto}
 
-    Descrição: {descricao}
+    Data de referencia: {data_referencia.strftime('%d/%m/%Y')}
+    Tipo: {tipo}
 
-    Data de referência: {data_formatada}
-    Recorrente: {"Sim" if recorrente else "Não"}
-    {"Tipo de recorrência: " + recorrencia_label if recorrente else ""}
-
-    Este é um e-mail automático. Não responda.
+    Descricao:
+    {descricao}
     """
 
     corpo_html = f"""
@@ -369,7 +360,6 @@ def enviar_email_lembrete(
                         "
                     >
 
-                        <!-- HEADER -->
                         <tr>
                             <td
                                 align="center"
@@ -397,13 +387,12 @@ def enviar_email_lembrete(
                                         font-size: 15px;
                                     "
                                 >
-                                    Plataforma de gestão para incorporadoras
+                                    Lembrete automatico do projeto
                                 </p>
 
                             </td>
                         </tr>
 
-                        <!-- CONTENT -->
                         <tr>
                             <td
                                 style="
@@ -419,7 +408,7 @@ def enviar_email_lembrete(
                                         color: white;
                                     "
                                 >
-                                    🔔 Lembrete de Projeto
+                                    {nome_projeto}
                                 </h2>
 
                                 <p
@@ -427,140 +416,63 @@ def enviar_email_lembrete(
                                         font-size: 16px;
                                         line-height: 28px;
                                         color: #d1d5db;
+                                        margin-bottom: 10px;
                                     "
                                 >
-                                    Você tem um lembrete pendente para o projeto abaixo.
+                                    <strong style="color: #ffffff;">Data de referencia:</strong>
+                                    {data_referencia.strftime('%d/%m/%Y')}
                                 </p>
 
-                                <!-- PROJETO -->
-                                <div
+                                <p
                                     style="
-                                        margin: 30px 0;
-                                        background-color: #0f172a;
-                                        border-radius: 16px;
-                                        padding: 28px 32px;
-                                        border: 1px solid rgba(255,255,255,0.06);
+                                        font-size: 16px;
+                                        line-height: 28px;
+                                        color: #d1d5db;
+                                        margin-top: 0;
                                     "
                                 >
+                                    <strong style="color: #ffffff;">Tipo:</strong>
+                                    {tipo}
+                                </p>
 
+                                <div
+                                    style="
+                                        margin: 30px 0 0;
+                                        background-color: #0f172a;
+                                        border: 1px solid rgba(16, 185, 129, 0.45);
+                                        border-radius: 16px;
+                                        padding: 20px;
+                                    "
+                                >
                                     <p
                                         style="
-                                            margin: 0 0 6px 0;
-                                            font-size: 12px;
-                                            text-transform: uppercase;
-                                            letter-spacing: 1px;
+                                            margin: 0 0 10px;
                                             color: #10b981;
-                                        "
-                                    >
-                                        Projeto
-                                    </p>
-
-                                    <p
-                                        style="
-                                            margin: 0 0 20px 0;
-                                            font-size: 20px;
                                             font-weight: bold;
-                                            color: #ffffff;
-                                        "
-                                    >
-                                        {nome_projeto}
-                                    </p>
-
-                                    <p
-                                        style="
-                                            margin: 0 0 6px 0;
-                                            font-size: 12px;
+                                            font-size: 14px;
+                                            letter-spacing: 0.4px;
                                             text-transform: uppercase;
-                                            letter-spacing: 1px;
-                                            color: #10b981;
                                         "
                                     >
-                                        Descrição
+                                        Descricao
                                     </p>
 
                                     <p
                                         style="
-                                            margin: 0 0 20px 0;
+                                            margin: 0;
+                                            white-space: pre-wrap;
                                             font-size: 16px;
-                                            line-height: 26px;
+                                            line-height: 28px;
                                             color: #e5e7eb;
                                         "
                                     >
                                         {descricao}
                                     </p>
-
-                                    <table
-                                        width="100%"
-                                        cellpadding="0"
-                                        cellspacing="0"
-                                        style="margin-top: 10px;"
-                                    >
-                                        <tr>
-                                            <td
-                                                style="
-                                                    width: 50%;
-                                                    padding-right: 10px;
-                                                    vertical-align: top;
-                                                "
-                                            >
-                                                <p
-                                                    style="
-                                                        margin: 0 0 6px 0;
-                                                        font-size: 12px;
-                                                        text-transform: uppercase;
-                                                        letter-spacing: 1px;
-                                                        color: #10b981;
-                                                    "
-                                                >
-                                                    Data de referência
-                                                </p>
-                                                <p
-                                                    style="
-                                                        margin: 0;
-                                                        font-size: 15px;
-                                                        color: #e5e7eb;
-                                                    "
-                                                >
-                                                    {data_formatada}
-                                                </p>
-                                            </td>
-                                            <td
-                                                style="
-                                                    width: 50%;
-                                                    padding-left: 10px;
-                                                    vertical-align: top;
-                                                "
-                                            >
-                                                <p
-                                                    style="
-                                                        margin: 0 0 6px 0;
-                                                        font-size: 12px;
-                                                        text-transform: uppercase;
-                                                        letter-spacing: 1px;
-                                                        color: #10b981;
-                                                    "
-                                                >
-                                                    Recorrência
-                                                </p>
-                                                <p
-                                                    style="
-                                                        margin: 0;
-                                                        font-size: 15px;
-                                                        color: #e5e7eb;
-                                                    "
-                                                >
-                                                    {recorrencia_label if recorrente else "Não recorrente"}
-                                                </p>
-                                            </td>
-                                        </tr>
-                                    </table>
-
                                 </div>
 
                             </td>
                         </tr>
 
-                        <!-- FOOTER -->
                         <tr>
                             <td
                                 align="center"
@@ -589,7 +501,7 @@ def enviar_email_lembrete(
                                         font-size: 12px;
                                     "
                                 >
-                                    Este é um e-mail automático. Não responda.
+                                    Este e um e-mail automatico. Nao responda.
                                 </p>
 
                             </td>
@@ -605,31 +517,8 @@ def enviar_email_lembrete(
     </html>
     """
 
-    try:
-        response = requests.post(
-            MAILGUN_API_URL,
-            auth=("api", MAILGUN_API_KEY),
-            data={
-                "from": f"Canteiro de Obras <{EMAIL_REMETENTE}>",
-                "to": email_destino,
-                "subject": assunto,
-                "text": corpo_texto,
-                "html": corpo_html,
-            },
-            timeout=10
-        )
-
-        response.raise_for_status()
-
-        logger.info(
-            "E-mail de lembrete enviado para %s (status %s)",
-            email_destino,
-            response.status_code
-        )
-
-    except Exception as e:
-        logger.error(
-            "Falha ao enviar e-mail de lembrete para %s: %s",
-            email_destino,
-            e
-        )
+    _enviar_email_brevo(
+        email_destino=email_destino,
+        assunto=assunto,
+        html_content=corpo_html,
+    )
