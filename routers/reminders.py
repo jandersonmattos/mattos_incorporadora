@@ -228,7 +228,13 @@ def _processar_lembretes_do_dia(db: Session, data_referencia: date):
         .all()
     )
 
+    print(
+        f"[reminders] Processando lembretes para {data_referencia.isoformat()}. "
+        f"Total de lembretes ativos encontrados: {len(lembretes)}"
+    )
+
     emails_enviados = 0
+    tentativas_envio = 0
     lembretes_enviados = 0
     ignorados_sem_destinatario = 0
 
@@ -236,29 +242,61 @@ def _processar_lembretes_do_dia(db: Session, data_referencia: date):
         if not _deve_enviar_hoje(lembrete, data_referencia):
             continue
 
+        print(
+            f"[reminders] Lembrete {lembrete.id} (projeto {lembrete.projeto_id}) "
+            f"deve ser enviado hoje ({data_referencia.isoformat()})"
+        )
+
         destinatarios = _destinatarios_lembrete(
             email_projeto=lembrete.projeto.proprietario_email
         )
 
         if not destinatarios:
+            print(
+                f"[reminders] Lembrete {lembrete.id} ignorado: "
+                f"nenhum destinatario valido encontrado"
+            )
             ignorados_sem_destinatario += 1
             continue
 
         for destinatario in destinatarios:
-            enviar_email_lembrete(
-                email_destino=destinatario,
-                nome_projeto=lembrete.projeto.nome,
-                descricao=lembrete.descricao,
-                data_referencia=data_referencia,
-                recorrente=lembrete.recorrente,
-                tipo_recorrencia=lembrete.tipo_recorrencia
+            tentativas_envio += 1
+            print(
+                f"[reminders] Enviando email de lembrete {lembrete.id} "
+                f"para {destinatario} (projeto: {lembrete.projeto.nome})"
             )
-            emails_enviados += 1
+            try:
+                enviar_email_lembrete(
+                    email_destino=destinatario,
+                    nome_projeto=lembrete.projeto.nome,
+                    descricao=lembrete.descricao,
+                    data_referencia=data_referencia,
+                    recorrente=lembrete.recorrente,
+                    tipo_recorrencia=lembrete.tipo_recorrencia
+                )
+                emails_enviados += 1
+                print(
+                    f"[reminders] Email enviado com sucesso para {destinatario} "
+                    f"(lembrete {lembrete.id})"
+                )
+            except Exception as erro:
+                print(
+                    f"[reminders] ERRO ao enviar email para {destinatario} "
+                    f"(lembrete {lembrete.id}): {erro}"
+                )
 
         lembrete.ultimo_envio_em = data_referencia
         lembretes_enviados += 1
 
     db.commit()
+
+    print(
+        f"[reminders] Processamento concluido. "
+        f"Tentativas de envio: {tentativas_envio}, "
+        f"emails enviados com sucesso: {emails_enviados}, "
+        f"lembretes processados: {lembretes_enviados}, "
+        f"ignorados sem destinatario: {ignorados_sem_destinatario}"
+    )
 
     return {
         "data_referencia": data_referencia.isoformat(),
